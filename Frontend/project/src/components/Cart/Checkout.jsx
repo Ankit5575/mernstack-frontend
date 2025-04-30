@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { useDispatch, useSelector } from "react-redux";
@@ -23,53 +23,20 @@ function Checkout() {
   const [paymentError, setPaymentError] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Ensure cart is loaded before proceeding
   useEffect(() => {
     if (!cart || !cart.products || cart.products.length === 0) {
       navigate("/");
     }
   }, [cart, navigate]);
 
-  // const handleCreateCheckout = async (e) => {
-  //   e.preventDefault();
-  //   setIsProcessing(true);
-
-  //   if (cart && cart.products.length > 0) {
-  //     try {
-  //       const res = await axios.post(
-  //         `${import.meta.env.VITE_BACKEND_URL}/api/checkout/create`,
-  //         {
-  //           checkoutItems: cart.products,
-  //           shippingAddress,
-  //           paymentMethod: "Paypal",
-  //           totalPrice: cart.totalPrice,
-  //         },
-  //         {
-  //           headers: {
-  //             Authorization: `Bearer ${localStorage.getItem("userToken")}`,
-  //           },
-  //         }
-  //       );
-
-  //       if (res.data && res.data._id) {
-  //         setCheckoutId(res.data._id);
-  //       }
-  //     } catch (error) {
-  //       console.error("Checkout creation failed:", error);
-  //       setPaymentError("Failed to create checkout. Please try again.");
-  //     } finally {
-  //       setIsProcessing(false);
-  //     }
-  //   }
-  // };
   const handleCreateCheckout = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
-  
+
     if (cart && cart.products.length > 0) {
       try {
         const res = await axios.post(
-          `${import.meta.env.VITE_BACKEND_URL}/api/checkout`, // ✅ Updated endpoint
+          `${import.meta.env.VITE_BACKEND_URL}/api/checkout`,
           {
             checkoutItems: cart.products,
             shippingAddress,
@@ -82,7 +49,7 @@ function Checkout() {
             },
           }
         );
-  
+
         if (res.data && res.data._id) {
           setCheckoutId(res.data._id);
         }
@@ -93,7 +60,8 @@ function Checkout() {
         setIsProcessing(false);
       }
     }
-  };  
+  };
+
   const handlePaymentSuccess = async (details) => {
     try {
       const response = await axios.put(
@@ -297,16 +265,24 @@ function Checkout() {
         </form>
       </div>
 
-      {/* Right Section */}
+      {/* Right Section - Order Summary */}
       <div className="bg-gray-50 p-6 rounded-lg">
         <h3 className="text-lg mb-4">Order Summary</h3>
         <div className="border-t py-4 mb-4">
           {cart.products.map((product, index) => (
             <div key={index} className="flex items-center justify-between py-2 border-b">
               <img
-                src={product.image}
-                alt={product.name}
-                className="w-20 h-20 object-cover mr-4"
+                src={
+                  Array.isArray(product.images) && product.images.length > 0
+                    ? product.images[0]
+                    : "https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg"
+                }
+                alt={product.name || "Product image"}
+                className="w-20 h-20 object-cover mr-4 rounded"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = "https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg";
+                }}
               />
               <div>
                 <h3 className="text-md">{product.name}</h3>
