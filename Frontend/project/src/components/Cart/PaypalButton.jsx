@@ -7,7 +7,7 @@
      <div>
        <PayPalScriptProvider 
        options={{
-        "client-Id":
+        "client-id":
 import.meta.env.VITE_PAYPAL_CLIENT_ID,
        }}
        >

@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-// Async thunk to create a checkout session
+// Create checkout session
 export const createCheckOut = createAsyncThunk(
   "checkout/createCheckout",
   async (checkOutData, { rejectWithValue }) => {
@@ -17,7 +17,55 @@ export const createCheckOut = createAsyncThunk(
       );
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response.data);
+      const message = error.response?.data?.message || error.message || "Checkout failed";
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// Pay for the checkout session
+export const payCheckout = createAsyncThunk(
+  "checkout/payCheckout",
+  async ({ checkoutId, paymentDetails }, { rejectWithValue }) => {
+    try {
+      const response = await axios.put(
+        `${import.meta.env.VITE_BACKEND_URL}/api/checkout/${checkoutId}/pay`,
+        {
+          paymentStatus: "completed",
+          paymentDetails,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("userToken")}`,
+          },
+        }
+      );
+      return response.data; // Return entire response to get message + checkout
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || "Payment failed";
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// Finalize the checkout into an order
+export const finalizeCheckout = createAsyncThunk(
+  "checkout/finalizeCheckout",
+  async (checkoutId, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(
+        `${import.meta.env.VITE_BACKEND_URL}/api/checkout/${checkoutId}/finalize`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("userToken")}`,
+          },
+        }
+      );
+      return response.data; // Includes order
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || "Finalization failed";
+      return rejectWithValue(message);
     }
   }
 );
@@ -25,31 +73,88 @@ export const createCheckOut = createAsyncThunk(
 const checkoutSlice = createSlice({
   name: "checkout",
   initialState: {
-    checkout: null, // This holds the checkout session data
-    loading: false, // Tracks loading state
-    error: null, // Holds error messages
+    checkout: null,
+    loading: false,
+    error: null,
+    success: false,
+
+    paying: false,
+    paymentSuccess: false,
+    paymentError: null,
+
+    finalizing: false,
+    finalizeSuccess: false,
+    finalizeError: null,
   },
   reducers: {
-    // You can add additional reducers here if needed
+    resetCheckoutState: (state) => {
+      state.checkout = null;
+      state.loading = false;
+      state.error = null;
+      state.success = false;
+
+      state.paying = false;
+      state.paymentSuccess = false;
+      state.paymentError = null;
+
+      state.finalizing = false;
+      state.finalizeSuccess = false;
+      state.finalizeError = null;
+    },
   },
   extraReducers: (builder) => {
     builder
-      // Handle the pending state
+      // Create checkout
       .addCase(createCheckOut.pending, (state) => {
-        state.loading = true; // Corrected from `state.pending`
+        state.loading = true;
         state.error = null;
+        state.success = false;
       })
-      // Handle the fulfilled state
       .addCase(createCheckOut.fulfilled, (state, action) => {
         state.loading = false;
-        state.checkout = action.payload; // Corrected to match `initialState`
+        state.checkout = action.payload;
+        state.success = true;
       })
-      // Handle the rejected state
       .addCase(createCheckOut.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload; // Corrected to store the error message
+        state.error = action.payload;
+        state.success = false;
+      })
+
+      // Pay checkout
+      .addCase(payCheckout.pending, (state) => {
+        state.paying = true;
+        state.paymentError = null;
+        state.paymentSuccess = false;
+      })
+      .addCase(payCheckout.fulfilled, (state, action) => {
+        state.paying = false;
+        state.paymentSuccess = true;
+        state.checkout = action.payload.checkout || state.checkout; // keep updated checkout
+      })
+      .addCase(payCheckout.rejected, (state, action) => {
+        state.paying = false;
+        state.paymentError = action.payload;
+        state.paymentSuccess = false;
+      })
+
+      // Finalize checkout
+      .addCase(finalizeCheckout.pending, (state) => {
+        state.finalizing = true;
+        state.finalizeError = null;
+        state.finalizeSuccess = false;
+      })
+      .addCase(finalizeCheckout.fulfilled, (state) => {
+        state.finalizing = false;
+        state.finalizeSuccess = true;
+      })
+      .addCase(finalizeCheckout.rejected, (state, action) => {
+        state.finalizing = false;
+        state.finalizeError = action.payload;
+        state.finalizeSuccess = false;
       });
   },
 });
 
+export const { resetCheckoutState } = checkoutSlice.actions;
 export default checkoutSlice.reducer;

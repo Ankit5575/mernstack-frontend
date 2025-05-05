@@ -7,7 +7,7 @@ import orderReducer from './orderSlice'
 import adminReducer from "./adminSlice"
 import adminProductReducer from "./adminProductSlice"
 import adminOrdersReducer from "./adminOrderSlice"
-
+ 
 const store = configureStore({
     reducer: {
         auth: authReducer,  // ✅ Add reducer properly

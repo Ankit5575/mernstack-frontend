@@ -1,21 +1,43 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import { fetchAllOrders, updateOrderStatus } from '../../redux/slices/adminOrderSlice';
+import { toast } from 'react-toastify';
 
 function OrderManagement() {
-  const orders = [
-    {
-      _id: 123456,
-      user: {
-        name: 'Ankit Singh',
-      },
-      totalPrice: 110,
-      status: 'Processing',
-    },
-  ];
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+
+  const { user } = useSelector((state) => state.auth);
+  const {
+    orders = [],
+    loading,
+    error,
+    statusUpdateSuccess
+  } = useSelector((state) => state.adminOrders);
+
+  useEffect(() => {
+    if (!user || user.role !== 'admin') {
+      navigate('/');
+    } else {
+      dispatch(fetchAllOrders());
+    }
+  }, [dispatch, user, navigate]);
+
+  useEffect(() => {
+    if (statusUpdateSuccess) {
+      toast.success('Order status updated successfully');
+    }
+  }, [statusUpdateSuccess]);
 
   const handleChange = (orderId, status) => {
-    console.log({ id: orderId, status: status });
-    // Add your logic to update the order status (e.g., API call)
+    dispatch(updateOrderStatus({ id: orderId, status }))
+      .unwrap()
+      .catch((err) => toast.error(err));
   };
+
+  if (loading) return <p className="text-center py-4">Loading...</p>;
+  if (error) return <p className="text-center text-red-500 py-4">Error: {error}</p>;
 
   return (
     <div className="max-w-7xl mx-auto p-6">
@@ -24,7 +46,7 @@ function OrderManagement() {
         <table className="min-w-full text-left text-gray-500">
           <thead className="bg-gray-100 text-xs uppercase text-gray-700">
             <tr>
-              <th className="py-3 px-4">Order Id</th>
+              <th className="py-3 px-4">Order ID</th>
               <th className="py-3 px-4">Customer</th>
               <th className="py-3 px-4">Total Price</th>
               <th className="py-3 px-4">Status</th>
@@ -34,12 +56,12 @@ function OrderManagement() {
           <tbody>
             {orders.length > 0 ? (
               orders.map((order) => (
-                <tr key={order._id} className="border-b hover:bg-gray-50 cursor-pointer">
+                <tr key={order._id} className="border-b hover:bg-gray-50">
                   <td className="px-4 py-4 font-medium text-gray-900 whitespace-nowrap">
                     #{order._id}
                   </td>
-                  <td className="p-4">{order.user.name}</td>
-                  <td className="p-4">${order.totalPrice}</td>
+                  <td className="p-4">{order?.user?.name || 'N/A'}</td>
+                  <td className="p-4">${order.totalPrice?.toFixed(2) || '0.00'}</td>
                   <td className="p-4">
                     <select
                       value={order.status}

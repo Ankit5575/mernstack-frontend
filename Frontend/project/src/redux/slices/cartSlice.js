@@ -1,18 +1,27 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-// Helper function to load cart from localStorage
+// Load cart from localStorage
 const loadCartFromStorage = () => {
   const storedCart = localStorage.getItem("cart");
-  return storedCart ? JSON.parse(storedCart) : { products: []};
+  return storedCart ? JSON.parse(storedCart) : { products: [] };
 };
 
-// Helper function to save cart to localStorage
+// Save cart to localStorage
 const saveCartToStorage = (cart) => {
   localStorage.setItem("cart", JSON.stringify(cart));
 };
 
-// Async Thunk to Fetch Cart
+// Normalize cart to always include productId
+const normalizeCart = (cart) => ({
+  ...cart,
+  products: cart.products.map((item) => ({
+    ...item,
+    productId: item.productId || item._id,
+  })),
+});
+
+// Fetch Cart
 export const fetchCart = createAsyncThunk(
   "cart/fetchCart",
   async ({ userId, guestId }, { rejectWithValue }) => {
@@ -27,7 +36,7 @@ export const fetchCart = createAsyncThunk(
   }
 );
 
-// Async Thunk to Add an Item to the Cart
+// Add to Cart
 export const addToCart = createAsyncThunk(
   "cart/addToCart",
   async ({ userId, guestId, productId, quantity, size, color }, { rejectWithValue }) => {
@@ -47,8 +56,8 @@ export const addToCart = createAsyncThunk(
   }
 );
 
-// Async Thunk to Update Cart Item Quantity
-export const updateCartItemQuantity= createAsyncThunk(
+// Update Cart Quantity
+export const updateCartItemQuantity = createAsyncThunk(
   "cart/updateCartItemQuantity",
   async ({ userId, guestId, productId, quantity, size, color }, { rejectWithValue }) => {
     try {
@@ -67,7 +76,7 @@ export const updateCartItemQuantity= createAsyncThunk(
   }
 );
 
-// Async Thunk to Remove an Item from the Cart
+// Remove from Cart
 export const removeFromCart = createAsyncThunk(
   "cart/removeFromCart",
   async ({ userId, guestId, productId, size, color }, { rejectWithValue }) => {
@@ -82,14 +91,14 @@ export const removeFromCart = createAsyncThunk(
   }
 );
 
-// Async Thunk to Merge Guest Cart into User Cart
+// Merge Guest Cart into User Cart
 export const mergeCart = createAsyncThunk(
   "cart/mergeCart",
-  async ({ guestId , user }, { rejectWithValue }) => {
+  async ({ guestId, user }, { rejectWithValue }) => {
     try {
       const response = await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}/api/cart/merge`,
-        { guestId , user},
+        { guestId, user },
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("userToken")}`,
@@ -103,7 +112,6 @@ export const mergeCart = createAsyncThunk(
   }
 );
 
-// Cart Slice
 const cartSlice = createSlice({
   name: "cart",
   initialState: {
@@ -113,77 +121,81 @@ const cartSlice = createSlice({
   },
   reducers: {
     clearCart: (state) => {
-      state.cart = { products: []};
-      localStorage.removeItem("cart")
+      state.cart = { products: [] };
+      localStorage.removeItem("cart");
     },
   },
   extraReducers: (builder) => {
     builder
-      // Handle fetching cart
+      // Fetch Cart
       .addCase(fetchCart.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchCart.fulfilled, (state, action) => {
         state.loading = false;
-        state.cart = action.payload;
-        saveCartToStorage(action.payload);
+        state.cart = normalizeCart(action.payload);
+        saveCartToStorage(state.cart);
       })
       .addCase(fetchCart.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload?.message || "Failed to fetch cart";
       })
-      // Handle adding to cart
+
+      // Add to Cart
       .addCase(addToCart.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(addToCart.fulfilled, (state, action) => {
         state.loading = false;
-        state.cart = action.payload;
-        saveCartToStorage(action.payload);
+        state.cart = normalizeCart(action.payload);
+        saveCartToStorage(state.cart);
       })
       .addCase(addToCart.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload?.message || "Failed to add item to cart";
       })
-      // Handle updating cart item
+
+      // Update Cart Item Quantity
       .addCase(updateCartItemQuantity.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(updateCartItemQuantity.fulfilled, (state, action) => {
         state.loading = false;
-        state.cart = action.payload;
-        saveCartToStorage(action.payload);
+        state.cart = normalizeCart(action.payload);
+        saveCartToStorage(state.cart);
       })
       .addCase(updateCartItemQuantity.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload?.message || "Failed to update cart";
       })
-      // Handle removing from cart
+
+      // Remove From Cart
       .addCase(removeFromCart.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(removeFromCart.fulfilled, (state, action) => {
         state.loading = false;
-        state.cart = action.payload;
-        saveCartToStorage(action.payload);
+        state.cart = normalizeCart(action.payload);
+        saveCartToStorage(state.cart);
       })
       .addCase(removeFromCart.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload?.message || "Failed to remove item from cart";
       })
-      // Handle merging cart
+
+      // Merge Cart
       .addCase(mergeCart.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(mergeCart.fulfilled, (state, action) => {
         state.loading = false;
-        state.cart = action.payload.cart;
-        saveCartToStorage(action.payload);
+        state.cart = normalizeCart(action.payload.cart);
+        saveCartToStorage(state.cart);
       })
       .addCase(mergeCart.rejected, (state, action) => {
         state.loading = false;
@@ -192,6 +204,5 @@ const cartSlice = createSlice({
   },
 });
 
-// Export actions and reducer
 export const { clearCart } = cartSlice.actions;
 export default cartSlice.reducer;

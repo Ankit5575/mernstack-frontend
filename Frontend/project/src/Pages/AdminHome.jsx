@@ -6,18 +6,22 @@ import { fetchAllOrders } from "../redux/slices/adminOrderSlice";
 
 function AdminHome() {
   const dispatch = useDispatch();
+
   const {
     products,
     loading: productsLoading,
     error: productsError,
   } = useSelector((state) => state.adminProducts);
+
   const {
-    orders,
-    totalOrders,
-    totalSales,
+    orders = [],
     loading: ordersLoading,
     error: orderError,
   } = useSelector((state) => state.adminOrders);
+
+  // Calculate totalSales and totalOrders manually
+  const totalOrders = orders.length;
+  const totalSales = orders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
 
   useEffect(() => {
     dispatch(fetchAdminProducts());
@@ -71,7 +75,7 @@ function AdminHome() {
                       <tr key={order._id} className="border-b hover:bg-gray-50 cursor-pointer">
                         <td className="p-4">{order._id}</td>
                         <td className="p-4">{order.user?.name || "N/A"}</td>
-                        <td className="p-4">${order.totalPrice.toFixed(2)}</td>
+                        <td className="p-4">${order.totalPrice?.toFixed(2) || "0.00"}</td>
                         <td className="p-4">{order.status}</td>
                       </tr>
                     ))
@@ -92,4 +96,4 @@ function AdminHome() {
   );
 }
 
-export default AdminHome; 
+export default AdminHome;
