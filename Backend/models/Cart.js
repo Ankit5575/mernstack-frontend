@@ -5,17 +5,21 @@ const cartItemSchema = new mongoose.Schema(
   {
     productId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Product",
+      ref: "Product", // This allows us to populate product details
       required: true,
     },
-    name: String,
-    image: String,
-    price: String, // Changed from String to Number
-    size: String,
-    color: String,
+    size: {
+      type: String,
+      required: true,
+    },
+    color: {
+      type: String,
+      required: true,
+    },
     quantity: {
       type: Number,
       default: 1,
+      min: 1,
     },
   },
   { _id: false }
@@ -31,7 +35,7 @@ const cartSchema = new mongoose.Schema(
     guestId: {
       type: String,
     },
-    products: [cartItemSchema], // Fixed schema reference
+    products: [cartItemSchema],
     totalPrice: {
       type: Number,
       required: true,
@@ -41,5 +45,4 @@ const cartSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Export the Cart model
 module.exports = mongoose.model("Cart", cartSchema);

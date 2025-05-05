@@ -3,8 +3,8 @@ const mongoose = require("mongoose");
 const checkoutItemSchema = new mongoose.Schema(
   {
     productId: {
-      type: mongoose.Schema.Types.ObjectId, // Reference to the Product model
-      ref: "Product", // Reference to the Product collection
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
       required: true,
     },
     name: {
@@ -12,7 +12,7 @@ const checkoutItemSchema = new mongoose.Schema(
       required: true,
     },
     image: {
-      type: String, // URL of the product image
+      type: String,
       required: true,
     },
     price: {
@@ -22,7 +22,7 @@ const checkoutItemSchema = new mongoose.Schema(
     quantity: {
       type: Number,
       required: true,
-      min: 1, // Ensure quantity is at least 1
+      min: 1,
     },
     size: {
       type: String,
@@ -32,12 +32,8 @@ const checkoutItemSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    quantity: {
-      type: Number,
-      required: true,
-    },
   },
-  { _id: false } // Disable _id for subdocuments
+  { _id: false }
 );
 
 const checkoutSchema = new mongoose.Schema(
@@ -45,26 +41,14 @@ const checkoutSchema = new mongoose.Schema(
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true, // Fixed quotes
-    }, 
-checkoutItems: [checkoutItemSchema], // Changed to plural for clarity
+      required: true,
+    },
+    checkoutItems: [checkoutItemSchema],
     shippingAddress: {
-      address: {
-        type: String,
-        required: true,
-      },
-      city: {
-        type: String,
-        required: true,
-      },
-      postalCode: {
-        type: String,
-        required: true,
-      },
-      country: {
-        type: String,
-        required: true,
-      },
+      address: { type: String, required: true },
+      city: { type: String, required: true },
+      postalCode: { type: String, required: true },
+      country: { type: String, required: true },
     },
     paymentMethod: {
       type: String,
@@ -74,30 +58,24 @@ checkoutItems: [checkoutItemSchema], // Changed to plural for clarity
       type: Number,
       required: true,
     },
-    paidAt: {
-      type: Date,
-    },
+    paidAt: Date,
     paymentStatus: {
       type: String,
-      default: "pending", // Default status is "pending"
-      enum: ["pending", "completed", "failed"], // Allowed values
+      default: "pending",
+      enum: ["pending", "completed", "failed"],
     },
     paymentDetails: {
-      type: mongoose.Schema.Types.Mixed, // Store payment-related details
+      type: mongoose.Schema.Types.Mixed,
     },
     isFinalized: {
       type: Boolean,
-      default: false, // Default to false
+      default: false,
     },
-    finalizedAt: {
-      type: Date,
-    },
-    
+    finalizedAt: Date,
   },
-  { timestamps: true } // Automatically add `createdAt` and `updatedAt` fields
+  { timestamps: true }
 );
 
-// Pre-save hook to set `finalizedAt` when `isFinalized` is true
 checkoutSchema.pre("save", function (next) {
   if (this.isFinalized && !this.finalizedAt) {
     this.finalizedAt = new Date();
@@ -105,7 +83,5 @@ checkoutSchema.pre("save", function (next) {
   next();
 });
 
-// Create the Checkout model
 const Checkout = mongoose.model("Checkout", checkoutSchema);
-
 module.exports = Checkout;

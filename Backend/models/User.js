@@ -4,8 +4,10 @@ const userSchema = new mongoose.Schema(
   {
     username: {
       type: String,
-      required: true,
-      },
+      required: false, // ✅ Optional now
+      trim: true
+      // ❌ DO NOT set unique here
+    },
     email: {
       type: String,
       required: [true, "Email is required"],
@@ -23,15 +25,11 @@ const userSchema = new mongoose.Schema(
       enum: ["admin", "user", "customer"],
       default: "user",
     },
-     
-     
-    
   },
   { timestamps: true }
 );
 
-// Ensure unique index is created properly
-userSchema.index({ username: 1 }, { unique: true });
+// ✅ Only enforce unique on email
 userSchema.index({ email: 1 }, { unique: true });
 
 const User = mongoose.model("User", userSchema);

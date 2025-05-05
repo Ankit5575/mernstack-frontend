@@ -3,59 +3,37 @@ const mongoose = require("mongoose");
 const Cart = require("../models/Cart");
 const Product = require("../models/Product");
 const Order = require("../models/OrderItem");
-const { protect } = require("../middleware/authMiddleware");
 const Checkout = require("../models/Checkout");
+const { protect } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// @route   POST /api/checkout
-// @desc    Create a new checkout session
-// // @access  Private
-// router.post("/", protect, async (req, res) => {
-//   try {
-//     const { checkoutItems, shippingAddress, paymentMethod, totalPrice } = req.body;
+/**
+ * Helper: Check if valid ObjectId
+ */
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
-//     // Validate request data
-//     if (!checkoutItems || checkoutItems.length === 0) {
-//       return res.status(400).json({ message: "No items in checkout" });
-//     }
-//     if (!shippingAddress || !paymentMethod || !totalPrice) {
-//       return res.status(400).json({ message: "Missing required fields" });
-//     }
+/**
+ * Helper: Validate checkout items
+ */
+const validateCheckoutItems = async (items) => {
+  for (const item of items) {
+    if (!isValidObjectId(item.productId)) {
+      return { error: `Invalid product ID: ${item.productId}` };
+    }
 
-//     // Validate checkout items (ensure products exist and are in stock)
-//     for (const item of checkoutItems) {
-//       if (!mongoose.Types.ObjectId.isValid(item.productId)) {
-//         return res.status(400).json({ message: `Invalid product ID: ${item.productId}` });
-//       }
+    const product = await Product.findById(item.productId);
+    if (!product) {
+      return { error: `Product not found: ${item.productId}` };
+    }
 
-//       const product = await Product.findById(item.productId);
-//       if (!product) {
-//         return res.status(404).json({ message: `Product not found: ${item.productId}` });
-//       }
-//       if (product.stock !== undefined && product.stock < item.quantity) {
-//         return res.status(400).json({ message: `Insufficient stock for product: ${product.name}` });
-//       }
-//     }
+    if (product.stock !== undefined && product.stock < item.quantity) {
+      return { error: `Insufficient stock for product: ${product.name}` };
+    }
+  }
+  return { success: true };
+};
 
-//     // Create a new checkout session
-//     const newCheckout = await Checkout.create({
-//       user: req.user._id,
-//       checkoutItems,
-//       shippingAddress,
-//       paymentMethod,
-//       totalPrice,
-//       paymentStatus: "pending",
-//       isFinalized: false,
-//     });
-
-//     console.log(`Checkout created for user: ${req.user._id}`);
-//     res.status(201).json(newCheckout);
-//   } catch (error) {
-//     console.error("Error creating checkout session:", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// });
 // @route   POST /api/checkout
 // @desc    Create a new checkout session
 // @access  Private
@@ -63,30 +41,20 @@ router.post("/", protect, async (req, res) => {
   try {
     const { checkoutItems, shippingAddress, paymentMethod, totalPrice } = req.body;
 
-    // Validate request data
-    if (!checkoutItems || checkoutItems.length === 0) {
+    // Validate required fields
+    if (!Array.isArray(checkoutItems) || !checkoutItems.length) {
       return res.status(400).json({ message: "No items in checkout" });
     }
     if (!shippingAddress || !paymentMethod || !totalPrice) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Validate checkout items (ensure products exist and are in stock)
-    for (const item of checkoutItems) {
-      if (!mongoose.Types.ObjectId.isValid(item.productId)) {
-        return res.status(400).json({ message: `Invalid product ID: ${item.productId}` });
-      }
-
-      const product = await Product.findById(item.productId);
-      if (!product) {
-        return res.status(404).json({ message: `Product not found: ${item.productId}` });
-      }
-      if (product.stock !== undefined && product.stock < item.quantity) {
-        return res.status(400).json({ message: `Insufficient stock for product: ${product.name}` });
-      }
+    // Validate each item
+    const validation = await validateCheckoutItems(checkoutItems);
+    if (validation.error) {
+      return res.status(400).json({ message: validation.error });
     }
 
-    // Create a new checkout session
     const newCheckout = await Checkout.create({
       user: req.user._id,
       checkoutItems,
@@ -97,101 +65,98 @@ router.post("/", protect, async (req, res) => {
       isFinalized: false,
     });
 
-    console.log(`Checkout created for user: ${req.user._id}`);
     res.status(201).json(newCheckout);
   } catch (error) {
-    console.error("Error creating checkout session:", error);
+    console.error("❌ Error creating checkout session:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
+
 // @route   PUT /api/checkout/:id/pay
-// @desc    Update checkout to mark as paid after successful payment
+// @desc    Mark checkout as paid
 // @access  Private
 router.put("/:id/pay", protect, async (req, res) => {
   const { paymentStatus, paymentDetails } = req.body;
-  
+
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ message: "Invalid checkout ID" });
     }
 
-    const checkout = await Checkout.findById(req.params.id);
-
-    if (!checkout) {
-      return res.status(404).json({ message: "Checkout not found" });
-    }
+    const checkout = await Checkout.findById(id);
+    if (!checkout) return res.status(404).json({ message: "Checkout not found" });
 
     if (paymentStatus === "completed") {
       checkout.paymentStatus = "completed";
       checkout.paymentDetails = paymentDetails;
-      checkout.paidAt = Date.now();
+      checkout.paidAt = new Date();
       await checkout.save();
 
-      res.status(200).json({ message: "Payment successful", checkout });
-    } else {
-      res.status(400).json({ message: "Invalid payment status" });
+      return res.status(200).json({ message: "Payment successful", checkout });
     }
+
+    res.status(400).json({ message: "Invalid payment status" });
   } catch (error) {
-    console.error("Error updating checkout payment status:", error);
+    console.error("❌ Error updating payment status:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-
-
- 
 // @route   POST /api/checkout/:id/finalize
-// @desc    Finalize checkout and convert to an order after payment confirmation
+// @desc    Finalize checkout and create order
 // @access  Private
 router.post("/:id/finalize", protect, async (req, res) => {
   try {
-    // ✅ Fix: Ensure checkout ID is valid
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ message: "Invalid checkout ID" });
     }
 
-    const checkout = await Checkout.findById(req.params.id);
+    const checkout = await Checkout.findById(id);
+    if (!checkout) return res.status(404).json({ message: "Checkout not found" });
 
-    if (!checkout) {
-      return res.status(404).json({ message: "Checkout not found" });
+    if (checkout.paymentStatus !== "completed") {
+      return res.status(400).json({ message: "Checkout is not paid" });
     }
 
-    if (checkout.paymentStatus === "completed" && !checkout.isFinalized) {
-      // ✅ Fix: Ensure `paymentMethod` exists
-      if (!checkout.paymentMethod) {
-        return res.status(400).json({ message: "Missing payment method in checkout" });
+    if (checkout.isFinalized) {
+      return res.status(400).json({ message: "Checkout already finalized" });
+    }
+
+    // Update stock for each product
+    for (const item of checkout.checkoutItems) {
+      const product = await Product.findById(item.productId);
+      if (product && product.stock >= item.quantity) {
+        product.stock -= item.quantity;
+        await product.save();
       }
-
-      // ✅ Fix: Pass `paymentMethod` when creating the order
-      const finalOrder = await Order.create({
-        user: checkout.user,
-        orderItems: checkout.checkoutItems,
-        shippingAddress: checkout.shippingAddress,
-        totalPrice: checkout.totalPrice,
-        paymentMethod: checkout.paymentMethod, // ✅ Ensure this is included
-        isPaid: true,
-        paidAt: checkout.paidAt,
-        isDelivered: false,
-        paymentStatus: "completed",
-        paymentDetails: checkout.paymentDetails,
-      });
-
-      // ✅ Mark checkout as finalized
-      checkout.isFinalized = true;
-      checkout.finalizedAt = Date.now();
-      await checkout.save();
-
-      // ✅ Delete the user's cart after checkout
-      await Cart.findOneAndDelete({ user: checkout.user });
-
-      res.status(201).json({ message: "Checkout finalized", order: finalOrder });
-    } else if (checkout.isFinalized) {
-      res.status(400).json({ message: "Checkout already finalized" });
-    } else {
-      res.status(400).json({ message: "Checkout is not paid" });
     }
+
+    // Create the order
+    const order = await Order.create({
+      user: checkout.user,
+      orderItems: checkout.checkoutItems,
+      shippingAddress: checkout.shippingAddress,
+      totalPrice: checkout.totalPrice,
+      paymentMethod: checkout.paymentMethod,
+      isPaid: true,
+      paidAt: checkout.paidAt,
+      isDelivered: false,
+      paymentStatus: "completed",
+      paymentDetails: checkout.paymentDetails,
+    });
+
+    checkout.isFinalized = true;
+    checkout.finalizedAt = new Date();
+    await checkout.save();
+
+    // Clear the user's cart
+    await Cart.findOneAndDelete({ user: checkout.user });
+
+    res.status(201).json({ message: "Checkout finalized", order });
   } catch (error) {
-    console.error("Error finalizing checkout:", error);
+    console.error("❌ Error finalizing checkout:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });

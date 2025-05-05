@@ -3,8 +3,8 @@ const mongoose = require("mongoose");
 const orderItemSchema = new mongoose.Schema(
   {
     productId: {
-      type: mongoose.Schema.Types.ObjectId, // Reference to the Product model
-      ref: "Product", // Reference to the Product collection
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
       required: true,
     },
     name: {
@@ -12,103 +12,77 @@ const orderItemSchema = new mongoose.Schema(
       required: true,
     },
     image: {
-      type: String, // URL of the product image
+      type: String,
       required: true,
     },
     price: {
       type: Number,
-       
+      required: true,
     },
-   
     size: {
       type: String,
       required: true,
     },
     color: {
       type: String,
-       
+      required: true,
     },
   },
-  { _id: false } // Disable _id for subdocuments
+  { _id: false }
 );
 
-
 const orderSchema = new mongoose.Schema(
-    {
-      user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-      },
-      orderItems: [orderItemSchema], // Array of order items
-      shippingAddress: {
-        address: {
-          type: String,
-          required: true,
-        },
-        city: {
-          type: String,
-          required: true,
-        },
-        postalCode: {
-          type: String,
-          required: true,
-        },
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    orderItems: [orderItemSchema],
+    shippingAddress: {
+      address: { type: String, required: true },
+      city: { type: String, required: true },
+      postalCode: { type: String, required: true },
+      country: { type: String, required: true },
+    },
+    paymentMethod: {
+      type: String,
+      required: true,
+    },
+    totalPrice: {
+      type: Number,
+      required: true,
+    },
+    paidAt: Date,
+    paymentStatus: {
+      type: String,
+      default: "pending",
+      enum: ["pending", "completed", "failed"],
+    },
+    paymentDetails: {
+      type: mongoose.Schema.Types.Mixed,
+    },
+    isDelivered: {
+      type: Boolean,
+      default: false,
+    },
+    deliveredAt: Date,
+    status: {
+      type: String,
+      enum: ["Processing", "Shipped", "Delivered", "Cancelled"],
+      default: "Processing",
+    },
+  },
+  { timestamps: true }
+);
 
-        country: {
-            type: String,
-            required: true,
-          },
-        },
-        paymentMethod: {
-          type: String,
-          required: true,
-           // Allowed payment methods
-        },
-        totalPrice: {
-          type: Number,
-          required: true,
-        },
-        paidAt: {
-          type: Date,
-        },
-        paymentStatus: {
-          type: String,
-          default: "pending", // Default status is "pending"
-            // Allowed values
-        },
-        paymentDetails: {
-          type: mongoose.Schema.Types.Mixed, // Store payment-related details (e.g., transaction ID, gateway response)
-        },
-        isDelivered: {
-            type: Boolean,
-            default: false, // Default to false
-          },
-          deliveredAt: {
-            type: Date,
-          },
-          status:{
-type:String,
-enum:["Processing" , "Shipped" , "Deliverd" , "Cancelled"],
-          },
-        },
-       
-        { timestamps: true } // Automatically add `createdAt` and `updatedAt` fields
-      );
-      
-    //   // Pre-save hook to set `deliveredAt` when `isDelivered` is true
-    //   orderSchema.pre("save", function (next) {
-    //     if (this.isDelivered && !this.deliveredAt) {
-    //       this.deliveredAt = new Date();
-    //     }
-    //     next();
-    //   });
-      
+// Optional: Auto set deliveredAt
+orderSchema.pre("save", function (next) {
+  if (this.isDelivered && !this.deliveredAt) {
+    this.deliveredAt = new Date();
+  }
+  next();
+});
 
-
-
-
-      const Order = mongoose.model("Order", orderSchema);
-
-      module.exports = Order;
-      
+const Order = mongoose.model("Order", orderSchema);
+module.exports = Order;

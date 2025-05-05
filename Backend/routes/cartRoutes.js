@@ -1,7 +1,7 @@
 const express = require("express");
 const Cart = require("../models/Cart");
 const Product = require("../models/Product");
-const {protect} = require("../middleware/authMiddleware")
+const { protect } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -14,6 +14,7 @@ const getCart = async (userId, guestId) => {
   }
 };
 
+// POST - Add to Cart
 router.post("/", async (req, res) => {
   const { productId, quantity, size, color, guestId, userId } = req.body;
 
@@ -21,11 +22,9 @@ router.post("/", async (req, res) => {
     const product = await Product.findById(productId);
     if (!product) return res.status(404).json({ message: "Product not found" });
 
-    // Check if the user already has a cart
     let cart = await getCart(userId, guestId);
 
     if (cart) {
-      // Find product in cart
       const productIndex = cart.products.findIndex(
         (p) =>
           p.productId.toString() === productId &&
@@ -34,145 +33,118 @@ router.post("/", async (req, res) => {
       );
 
       if (productIndex > -1) {
-        // If product exists, update quantity
         cart.products[productIndex].quantity += quantity;
       } else {
-        // Add new product to cart
-        cart.products.push({
-          productId,
-          name: product.name,
-          image: product.images[0]?.url || "", // Handle case where no image exists
-          price: product.price,
-          size,
-          color,
-          quantity,
-        });
+        cart.products.push({ productId, size, color, quantity });
       }
-
-      // Recalculate total price
-      cart.totalPrice = cart.products.reduce(
-        (acc, item) => acc + item.price * item.quantity,
-        0
-      );
-
-      await cart.save();
-      return res.status(200).json(cart);
     } else {
-      // ✅ Create a new cart and ensure `user` field is correctly assigned
-      const newCart = await Cart.create({
-        user: userId || null, // Ensure userId is saved properly
-        guestId: guestId ? guestId : "guest_" + new Date().getTime(),
-        products: [
-          {
-            productId,
-            name: product.name,
-            image: product.images[0]?.url || "",
-            price: product.price,
-            size,
-            color,
-            quantity,
-          },
-        ],
-        totalPrice: product.price * quantity,
+      cart = await Cart.create({
+        user: userId || null,
+        guestId: guestId || "guest_" + new Date().getTime(),
+        products: [{ productId, size, color, quantity }],
+        totalPrice: 0,
       });
-
-      return res.status(201).json(newCart);
     }
+
+    await cart.save();
+
+    const populatedCart = await Cart.findById(cart._id).populate("products.productId");
+    const finalCart = await calculateTotalAndFormat(populatedCart);
+    res.status(200).json(finalCart);
   } catch (error) {
-    console.error("Error creating/updating cart:", error);
+    console.error("Error adding to cart:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
+// PUT - Update Quantity
+router.put("/", async (req, res) => {
+  const { productId, quantity, size, color, guestId, userId } = req.body;
 
-//ruout put /api/cart 
-//desc update product qunaity 
+  try {
+    let cart = await getCart(userId, guestId);
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
 
-router.put("/" , async(req, res)=>{
-  const {productId , quantity , size , color , guestId , userId} = req.body;
-   try {
-    let cart = await getCart(userId , guestId);
-    if(!cart) return res.status(404).json({message:"cart not found"})
-      const productIndex = cart.products.findIndex(
-      (p)=>p.productId.toString() ===productId && p.size ===size && p.color === color
-      
-      )
-      if(productIndex > -1){
-        if(quantity > 0){
-          cart.products[productIndex].quantity = quantity;
-          
-        }
-        else{
-          cart.products.splice(productIndex , 1)//Remvoe form the cart 
-        }
-        cart.products.reduce((acc ,item)=> acc + item.price * item.quantity , 0)
-        await cart.save()
-        return res.status(200).json(cart)
-      }else{
-        return res.status(404).json({message : "product not found "})
+    const productIndex = cart.products.findIndex(
+      (p) =>
+        p.productId.toString() === productId &&
+        p.size === size &&
+        p.color === color
+    );
+
+    if (productIndex > -1) {
+      if (quantity > 0) {
+        cart.products[productIndex].quantity = quantity;
+      } else {
+        cart.products.splice(productIndex, 1);
       }
-   } catch (error) {
-    console.error(error)
-    return res.status(500).json({message: "server error hai bahi "})
-    
-   }
-})
 
-
-
-router.delete("/" , async (req , res)=>{
-  const {productId , size , color , guestId , userId} = req.body;
-  try {
-    let cart = await getCart(userId ,guestId)
-    if(!cart) return res.status(404).json({message : "cart not found "})
-      const productIndex = cart.products.findIndex(
-    (p)=> p.productId.toString() === productId && p.size === size && p.color === color
-    )
-    if(productIndex > -1){
-      cart.products.splice(productIndex , 1)
-      cart.totalPrice = cart.products.reduce(
-        (acc ,item)=>acc + item.price * item.quantity, 0
-      )
-      await cart.save()
-      return res.status(200).json(cart)
-    }else {
-      return res.status(404).json({message : "product not ound "})
+      await cart.save();
+      const populatedCart = await Cart.findById(cart._id).populate("products.productId");
+      const finalCart = await calculateTotalAndFormat(populatedCart);
+      return res.status(200).json(finalCart);
+    } else {
+      return res.status(404).json({ message: "Product not found in cart" });
     }
   } catch (error) {
-    console.error(error)
-    res.status(500).json({message : "serverr errrro ahi bhai yaha "})
+    console.error("Error updating cart:", error);
+    res.status(500).json({ message: "Server error" });
   }
-})
+});
 
+// DELETE - Remove Item
+router.delete("/", async (req, res) => {
+  const { productId, size, color, guestId, userId } = req.body;
 
-
-//get /api cat 
-router.get("/" , async(req , res)=>{
-  const {userId , guestId} = req.body;
   try {
-    const cart = await getCart(userId ,guestId)
-    if(cart){
-      res.json(cart)
-    }else{
-      res.status(400).json({message : "cart not found"})
+    let cart = await getCart(userId, guestId);
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+    const productIndex = cart.products.findIndex(
+      (p) =>
+        p.productId.toString() === productId &&
+        p.size === size &&
+        p.color === color
+    );
+
+    if (productIndex > -1) {
+      cart.products.splice(productIndex, 1);
+      await cart.save();
+
+      const populatedCart = await Cart.findById(cart._id).populate("products.productId");
+      const finalCart = await calculateTotalAndFormat(populatedCart);
+      return res.status(200).json(finalCart);
+    } else {
+      return res.status(404).json({ message: "Product not found" });
     }
-    
   } catch (error) {
-    console.error(error
-    )
-    res.status(500).json({message : "serve errro hai "})
-
+    console.error("Error deleting from cart:", error);
+    res.status(500).json({ message: "Server error" });
   }
-})
+});
 
+// GET - Fetch Cart
+router.get("/", async (req, res) => {
+  const { userId, guestId } = req.query;
 
-//route post/api/cart/merege
+  try {
+    const cart = await getCart(userId, guestId);
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
 
+    const populatedCart = await Cart.findById(cart._id).populate("products.productId");
+    const finalCart = await calculateTotalAndFormat(populatedCart);
+    res.status(200).json(finalCart);
+  } catch (error) {
+    console.error("Error fetching cart:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// POST - Merge Guest Cart
 router.post("/merge", protect, async (req, res) => {
   const { guestId } = req.body;
 
   try {
-    // Find the guest cart and user cart
     const guestCart = await Cart.findOne({ guestId });
     const userCart = await Cart.findOne({ user: req.user._id });
 
@@ -181,46 +153,75 @@ router.post("/merge", protect, async (req, res) => {
     }
 
     if (!userCart) {
-      // If no user cart exists, assign the guest cart to the user
       guestCart.user = req.user._id;
       guestCart.guestId = null;
       await guestCart.save();
-      return res.status(200).json({ message: "Guest cart assigned to user", cart: guestCart });
+
+      const populatedCart = await Cart.findById(guestCart._id).populate("products.productId");
+      return res.status(200).json({ message: "Guest cart assigned to user", cart: await calculateTotalAndFormat(populatedCart) });
     }
 
-    // Merge guest cart into the user cart
+    // Merge
     guestCart.products.forEach((guestItem) => {
-      const productIndex = userCart.products.findIndex(
+      const existingIndex = userCart.products.findIndex(
         (item) =>
           item.productId.toString() === guestItem.productId.toString() &&
           item.size === guestItem.size &&
           item.color === guestItem.color
       );
 
-      if (productIndex > -1) {
-        // If product exists in user cart, update the quantity
-        userCart.products[productIndex].quantity += guestItem.quantity;
+      if (existingIndex > -1) {
+        userCart.products[existingIndex].quantity += guestItem.quantity;
       } else {
-        // Otherwise, add the guest cart item to user cart
         userCart.products.push(guestItem);
       }
     });
 
-    // Update total price
-    userCart.totalPrice = userCart.products.reduce(
-      (acc, item) => acc + item.price * item.quantity,
-      0
-    );
-
     await userCart.save();
-    await Cart.findOneAndDelete({ guestId }); // Delete guest cart after merging
+    await Cart.findOneAndDelete({ guestId });
 
-    return res.status(200).json({ message: "Cart merged successfully", cart: userCart });
+    const populatedCart = await Cart.findById(userCart._id).populate("products.productId");
+    return res.status(200).json({ message: "Cart merged", cart: await calculateTotalAndFormat(populatedCart) });
+
   } catch (error) {
-    return res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Merge cart error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
 
+// ✅ Helper: format and recalculate total
+async function calculateTotalAndFormat(cart) {
+  let total = 0;
+
+  const products = cart.products.map((item) => {
+    const product = item.productId;
+
+    const price = product?.price || 0;
+    const quantity = item.quantity || 1;
+
+    total += price * quantity;
+
+    return {
+      productId: product._id,
+      name: product.name,
+      price: price,
+      images: product.images,
+      quantity: quantity,
+      size: item.size,
+      color: item.color,
+    };
+  });
+
+  cart.totalPrice = total;
+  await cart.save(); // Save updated total
+
+  return {
+    products,
+    totalPrice: cart.totalPrice,
+    user: cart.user,
+    guestId: cart.guestId,
+  };
+}
 
 module.exports = router;
